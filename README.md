@@ -426,6 +426,13 @@ vrchat-project-mcp/
 │       │   └── VrcMaTools.cs           #   vrc.ma_* MA 参数
 │       └── Examples/
 │           └── ExampleExtensionTools.cs#   扩展示例（可删除）
+├── Agent/                              # AI Agent 集成（非 Unity 包内容）
+│   └── DSH/                            #   DeepSeek Harness（DSH）预设，可独立发布为 GitHub 仓库
+│       ├── vrchat-project-mode/        #     预设本体（agent.cordis.yml + preset.yml）
+│       ├── install.sh / install.ps1    #     一键安装 / 卸载脚本
+│       ├── package.json                #     仓库清单（元数据）
+│       ├── README.md / LICENSE         #     独立仓库文档与许可
+│       └── CHANGELOG.md                #     变更记录
 └── DevTests~/                          # 开发期冒烟测试（目录名带 ~ 后缀，Unity 不会导入，非包内容）
     └── CoreSanity/                     #   Core 协议层 37 项端到端测试（dotnet 工程）
 ```

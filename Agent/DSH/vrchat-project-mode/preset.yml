@@ -1,2 +1,2 @@
-name: VRChat 工程助手
+name: VrChat工程模式
 description: 接入 VRChat Project MCP 服务的 Unity/VRChat 模型开发助手。通过 mcp__vrchat__* 工具读写编辑器内的场景、资产、头像、表情菜单与表情参数，同时保留完整的编码、文件与检索能力。
