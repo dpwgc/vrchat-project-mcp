@@ -501,15 +501,36 @@ namespace VrchatProjectMcp.Editor.Tools
                     }
                     else value = null;
                     break;
-                case SerializedPropertyType.ArraySize: value = (long)p.arraySize; break;
+                case SerializedPropertyType.ArraySize: value = (long)p.intValue; break;
                 case SerializedPropertyType.Generic:
-                    value = depth > 0 ? ReadChildren(p, depth - 1) : "…(深度限制)";
+                    if (p.isArray)
+                    {
+                        value = depth > 0 ? ReadArray(p, depth - 1) : "…(深度限制)";
+                    }
+                    else
+                    {
+                        value = depth > 0 ? ReadChildren(p, depth - 1) : "…(深度限制)";
+                    }
                     break;
                 default:
                     value = p.propertyType + "（暂不支持读取）";
                     break;
             }
             result.Set("value", value);
+            return result;
+        }
+
+        /// <summary>读取数组属性为 JSON 数组（逐元素递归读取，带数量上限防爆）。</summary>
+        private static JsonArray ReadArray(SerializedProperty array, int depth)
+        {
+            var result = new JsonArray();
+            int count = array.arraySize;
+            int limit = count < 500 ? count : 500;
+            for (int i = 0; i < limit; i++)
+            {
+                result.Push(ReadPropertyValue(array.GetArrayElementAtIndex(i), depth));
+            }
+            if (count > limit) result.Push("…(" + (count - limit) + " 个元素已省略)");
             return result;
         }
 
