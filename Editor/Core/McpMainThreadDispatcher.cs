@@ -83,13 +83,13 @@ namespace VrchatProjectMcp.Editor.Core
             if (System.Threading.Thread.CurrentThread.ManagedThreadId == MainThreadId) return func();
 
             var done = new ManualResetEventSlim(false);
-            volatile bool abandoned = false; // 超时置位：阻止尚未开始的操作执行
+            var abandoned = new AbandonFlag(); // 超时置位：阻止尚未开始的操作执行
             object result = null;
             Exception error = null;
 
             Queue.Enqueue(() =>
             {
-                if (abandoned)
+                if (abandoned.Value)
                 {
                     // 超时后操作才轮到执行：直接放弃，避免"迟到副作用"
                     done.Set();
@@ -111,12 +111,21 @@ namespace VrchatProjectMcp.Editor.Core
 
             if (!done.Wait(timeoutMs))
             {
-                abandoned = true;
+                abandoned.Value = true;
                 Debug.LogWarning("[VrcProjectMCP] 主线程调用超时（" + timeoutMs + "ms）：尚未开始的操作已取消；若操作已在执行中，可能仍在后台继续");
                 throw new TimeoutException("主线程执行超时（" + timeoutMs + "ms）。尚未开始的操作已取消；若操作涉及弹窗请先在编辑器中处理，已在执行中的操作可能仍在后台继续。");
             }
             if (error != null) throw error;
             return result;
+        }
+
+        /// <summary>
+        /// 跨线程可见的布尔标志容器。局部变量无法声明为 volatile，
+        /// 因此用持有 volatile 字段的对象来保证写线程与读线程之间的可见性。
+        /// </summary>
+        private sealed class AbandonFlag
+        {
+            public volatile bool Value;
         }
     }
 }
