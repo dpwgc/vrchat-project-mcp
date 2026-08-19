@@ -2,6 +2,8 @@
 
 面向 **VRChat 模型开发** 的 Unity 编辑器 MCP（Model Context Protocol）插件。
 
+### 注意：本MCP插件可通过该 [DSH Agent 预设](https://github.com/dpwgc/vrchat-project-dsh-preset) 直接接入 DeepSeek Harness，使用 DeepSeek Harness 辅助改模。
+
 通过内置 HTTP 服务（JSON-RPC 2.0 / SSE）向外部 AI Agent 暴露 **49 个工具**，覆盖：
 
 - **常规 Unity 项目能力**：项目信息、场景/对象/组件查询与编辑、资产管理、控制台日志排查（对齐现有 unity-mcp 类插件的 `manage_scene / manage_gameobject / manage_asset / manage_editor` 能力）；
@@ -9,7 +11,6 @@
 
 **纯 C# 实现，零第三方依赖**（不引入 Python / JS / Newtonsoft.Json 等任何库），兼容 **Unity 2022.3 与 Unity 6**（Windows / macOS / Linux 编辑器）。
 
-可通过该 [DSH Agent 预设](https://github.com/dpwgc/vrchat-project-dsh-preset) 直接接入 DeepSeek Harness。
 ---
 
 ## 目录
@@ -427,13 +428,6 @@ vrchat-project-mcp/
 │       │   └── VrcMaTools.cs           #   vrc.ma_* MA 参数
 │       └── Examples/
 │           └── ExampleExtensionTools.cs#   扩展示例（可删除）
-├── Agent/                              # AI Agent 集成（非 Unity 包内容）
-│   └── DSH/                            #   DeepSeek Harness（DSH）预设，可独立发布为 GitHub 仓库
-│       ├── vrchat-project-mode/        #     预设本体（agent.cordis.yml + preset.yml）
-│       ├── install.sh / install.ps1    #     一键安装 / 卸载脚本
-│       ├── package.json                #     仓库清单（元数据）
-│       ├── README.md / LICENSE         #     独立仓库文档与许可
-│       └── CHANGELOG.md                #     变更记录
 └── DevTests~/                          # 开发期冒烟测试（目录名带 ~ 后缀，Unity 不会导入，非包内容）
     └── CoreSanity/                     #   Core 协议层 37 项端到端测试（dotnet 工程）
 ```
