@@ -1,0 +1,17 @@
+{
+  "name": "VrchatProjectMcp.Editor",
+  "rootNamespace": "VrchatProjectMcp.Editor",
+  "references": [
+    "VrchatProjectMcp.Core"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [],
+  "versionDefines": []
+}

@@ -1,0 +1,21 @@
+{
+  "name": "com.vrchat-project.mcp",
+  "version": "0.1.0",
+  "displayName": "VRChat Project MCP",
+  "description": "面向 VRChat 模型开发的 Unity 编辑器 MCP 插件：通过 HTTP(JSON-RPC 2.0 / SSE) 向外部 Agent 暴露项目查询与写入工具，覆盖常规 Unity 项目能力与 VRChat 头像开发能力（菜单/参数/组件/性能统计/控制台日志），自带只读/读写权限控制、实时日志与配置面板。纯 C# 实现，零第三方依赖，兼容 Unity 2022.3 与 Unity 6。",
+  "unity": "2022.3",
+  "keywords": [
+    "mcp",
+    "vrchat",
+    "unity",
+    "ai",
+    "editor",
+    "agent"
+  ],
+  "category": "Tools",
+  "author": {
+    "name": "vrchat-project-mcp"
+  },
+  "license": "MIT",
+  "dependencies": {}
+}
