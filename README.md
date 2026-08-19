@@ -9,6 +9,7 @@
 
 **纯 C# 实现，零第三方依赖**（不引入 Python / JS / Newtonsoft.Json 等任何库），兼容 **Unity 2022.3 与 Unity 6**（Windows / macOS / Linux 编辑器）。
 
+可通过该 [DSH Agent 预设](https://github.com/dpwgc/vrchat-project-dsh-preset) 直接接入 DeepSeek Harness。
 ---
 
 ## 目录
