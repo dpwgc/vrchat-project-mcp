@@ -52,7 +52,7 @@ namespace VrchatProjectMcp.Editor.Tools
             for (int i = 0; i < guids.Length && assets.Count < limit; i++)
             {
                 string path = AssetDatabase.GUIDToAssetPath(guids[i]);
-                Type mainType = AssetDatabase.GetMainAssetType(path);
+                Type mainType = AssetDatabase.GetMainAssetTypeAtPath(path);
                 assets.Add(new JsonObject()
                     .Set("name", Path.GetFileName(path))
                     .Set("path", path)

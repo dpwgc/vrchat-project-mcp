@@ -636,7 +636,12 @@ namespace VrchatProjectMcp.Editor.Tools
             if (animator == null || animator.runtimeAnimatorController == null)
                 return new JsonObject().Set("error", "未找到 Animator 或 AnimatorController");
 
-            RuntimeAnimatorController controller = animator.runtimeAnimatorController;
+            AnimatorController controller = animator.runtimeAnimatorController as AnimatorController;
+            if (controller == null)
+                return new JsonObject()
+                    .Set("controllerName", animator.runtimeAnimatorController.name)
+                    .Set("error", "运行时控制器不是 AnimatorController（可能是 AnimatorOverrideController 或资产未正确序列化）");
+
             var result = new JsonObject()
                 .Set("controllerName", controller.name)
                 .Set("layerCount", (long)controller.layers.Length);
@@ -645,13 +650,14 @@ namespace VrchatProjectMcp.Editor.Tools
             foreach (AnimatorControllerLayer layer in controller.layers)
             {
                 var states = new JsonArray();
-                foreach (AnimatorState state in layer.stateMachine.states)
+                foreach (ChildAnimatorState childState in layer.stateMachine.states)
                 {
+                    AnimatorState state = childState.state;
                     states.Add(new JsonObject()
-                        .Set("name", state.state.name)
-                        .Set("motion", state.state.motion != null ? state.state.motion.name : null)
-                        .Set("speed", state.state.speed)
-                        .Set("writeDefaults", state.state.writeDefaultValues));
+                        .Set("name", state.name)
+                        .Set("motion", state.motion != null ? state.motion.name : null)
+                        .Set("speed", state.speed)
+                        .Set("writeDefaults", state.writeDefaultValues));
                 }
                 layers.Add(new JsonObject()
                     .Set("name", layer.name)
