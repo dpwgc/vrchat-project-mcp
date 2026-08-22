@@ -2,7 +2,7 @@
 
 面向 **VRChat 模型开发** 的 Unity 编辑器 MCP（Model Context Protocol）插件。
 
-### 注意：本MCP插件可通过该 [DSH Agent 预设](https://github.com/dpwgc/vrchat-project-dsh-preset) 直接接入 DeepSeek Harness，使用 DeepSeek Harness 辅助改模。
+### 注意：本MCP插件可通过该 [DSH Agent 预设](https://github.com/dpwgc/vrchat-project-dsh-preset) 直接接入 DeepSeek Harness，使用 DeepSeek Harness 辅助改模。建议使用只读模式，如需使用读写模式，请务必确保模型存在备份。
 
 通过内置 HTTP 服务（JSON-RPC 2.0 / SSE）向外部 AI Agent 暴露 **49 个工具**，覆盖：
 
