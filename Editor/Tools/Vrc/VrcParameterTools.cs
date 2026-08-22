@@ -1,12 +1,15 @@
 // =================================================================================================
 // VrcParameterTools.cs
-// VRChat 专用工具：Expression Parameters（表情参数）的查询 / 新建 / 复制 / 编辑
+// VRChat 专用工具：参数（Expression Parameters）的查询 / 新建 / 复制 / 编辑
 // -------------------------------------------------------------------------------------------------
+// 说明：VRC 的表情 / 衣柜 / 饰品切换等所有参数都使用同一种资产类型
+// （VRCExpressionParameters），因此以下工具对表情、衣柜、饰品等各类参数通用。
+//
 // 对应 MCP 工具（前缀 vrc）：
-//   vrc.list_expression_parameters   查询 列出项目中的表情参数资产
-//   vrc.get_expression_parameters    查询 读取参数列表（名称/类型/默认值/是否保存）
-//   vrc.create_expression_parameters 写入 新建表情参数资产
-//   vrc.copy_expression_parameters   写入 复制表情参数资产
+//   vrc.list_parameters              查询 列出项目中的参数资产
+//   vrc.get_parameters               查询 读取参数列表（名称/类型/默认值/是否保存）
+//   vrc.create_parameters            写入 新建参数资产
+//   vrc.copy_parameters              写入 复制参数资产
 //   vrc.set_parameter                写入 新增/修改/删除参数
 //
 // 实现说明：
@@ -23,7 +26,7 @@ using VrchatProjectMcp.Core.Mcp;
 namespace VrchatProjectMcp.Editor.Tools
 {
     /// <summary>
-    /// VRChat 表情参数工具（内部静态类）。
+    /// VRChat 参数工具（内部静态类，表情/衣柜/饰品等各类参数通用）。
     /// </summary>
     internal static class VrcParameterTools
     {
@@ -31,9 +34,9 @@ namespace VrchatProjectMcp.Editor.Tools
         // 查询类
         // ==================================================================
 
-        /// <summary>列出项目中的表情参数资产。</summary>
-        [McpTool("vrc.list_expression_parameters", McpToolAccess.Query, "vrc", "列出项目中的 VRCExpressionParameters（表情参数）资产")]
-        public static object ListExpressionParameters(
+        /// <summary>列出项目中的参数资产（通用：表情/衣柜/饰品等）。</summary>
+        [McpTool("vrc.list_parameters", McpToolAccess.Query, "vrc", "列出项目中的 VRCExpressionParameters 参数资产（通用：表情/衣柜/饰品切换等所有参数均使用这一种资产类型）")]
+        public static object ListParameters(
             [McpParam("名称关键字（可留空）")] string search = null,
             [McpParam("最多返回条数（默认 100）")] int limit = 100)
         {
@@ -51,9 +54,9 @@ namespace VrchatProjectMcp.Editor.Tools
             return new JsonObject().Set("count", (long)items.Count).Set("parametersFiles", items);
         }
 
-        /// <summary>读取表情参数资产内容（参数名/类型/默认值/是否保存）。</summary>
-        [McpTool("vrc.get_expression_parameters", McpToolAccess.Query, "vrc", "读取表情参数资产内容（参数名/类型 Int·Float·Bool/默认值/是否保存）")]
-        public static object GetExpressionParameters(
+        /// <summary>读取参数资产内容（参数名/类型/默认值/是否保存，通用）。</summary>
+        [McpTool("vrc.get_parameters", McpToolAccess.Query, "vrc", "读取参数资产内容（参数名/类型 Int·Float·Bool/默认值/是否保存；通用：表情/衣柜/饰品切换等参数）")]
+        public static object GetParameters(
             [McpParam("参数资产路径（与 avatarTarget 二选一）")] string parametersPath = null,
             [McpParam("头像目标（实例ID/场景路径/预制件路径；读取其绑定的参数资产）")] string avatarTarget = null)
         {
@@ -69,7 +72,7 @@ namespace VrchatProjectMcp.Editor.Tools
                     Component descriptor = ToolHelpers.FindAvatarDescriptor(context.Root);
                     asset = VrcReflection.ReadDescriptorAsset(descriptor, "expressionParameters");
                 }
-                if (asset == null) throw new McpToolException("该头像未绑定 Expression Parameters（expressionParameters 为空）");
+                if (asset == null) throw new McpToolException("该头像未绑定参数（expressionParameters 为空）");
             }
             else
             {
@@ -82,9 +85,9 @@ namespace VrchatProjectMcp.Editor.Tools
         // 写入类
         // ==================================================================
 
-        /// <summary>新建表情参数资产。</summary>
-        [McpTool("vrc.create_expression_parameters", McpToolAccess.Write, "vrc", "新建 VRCExpressionParameters（表情参数）资产（path 为文件夹或完整 .asset 路径）")]
-        public static object CreateExpressionParameters(
+        /// <summary>新建参数资产（通用：表情/衣柜/饰品等）。</summary>
+        [McpTool("vrc.create_parameters", McpToolAccess.Write, "vrc", "新建 VRCExpressionParameters 参数资产（通用：表情/衣柜/饰品切换等；path 为文件夹或完整 .asset 路径）")]
+        public static object CreateParameters(
             [McpParam("资产路径（Assets/ 下文件夹，或完整 xx.asset 路径）", Required = true)] string path,
             [McpParam("参数文件名称（path 为文件夹时必填）")] string name = null)
         {
@@ -100,9 +103,9 @@ namespace VrchatProjectMcp.Editor.Tools
                 .Set("name", asset.name);
         }
 
-        /// <summary>复制表情参数资产。</summary>
-        [McpTool("vrc.copy_expression_parameters", McpToolAccess.Write, "vrc", "复制表情参数资产到新路径（重名自动追加序号）")]
-        public static object CopyExpressionParameters(
+        /// <summary>复制参数资产（通用：表情/衣柜/饰品等）。</summary>
+        [McpTool("vrc.copy_parameters", McpToolAccess.Write, "vrc", "复制参数资产到新路径（重名自动追加序号；通用：表情/衣柜/饰品切换等）")]
+        public static object CopyParameters(
             [McpParam("源参数文件路径", Required = true)] string sourcePath,
             [McpParam("目标路径（Assets/ 下）", Required = true)] string targetPath)
         {
@@ -115,8 +118,8 @@ namespace VrchatProjectMcp.Editor.Tools
             return new JsonObject().Set("source", sourcePath).Set("target", unique);
         }
 
-        /// <summary>新增/修改/删除表情参数（parameter 对象支持部分字段更新）。</summary>
-        [McpTool("vrc.set_parameter", McpToolAccess.Write, "vrc", "新增/修改/删除表情参数。action: add/update/remove；parameter 对象字段：name、valueType(Int/Float/Bool)、defaultValue、saved")]
+        /// <summary>新增/修改/删除参数（parameter 对象支持部分字段更新，通用）。</summary>
+        [McpTool("vrc.set_parameter", McpToolAccess.Write, "vrc", "新增/修改/删除参数（通用：表情/衣柜/饰品切换等）。action: add/update/remove；parameter 对象字段：name、valueType(Int/Float/Bool)、defaultValue、saved")]
         public static object SetParameter(
             [McpParam("参数资产路径", Required = true)] string parametersPath,
             [McpParam("操作：add 新增 / update 修改 / remove 删除", Required = true)] string action,

@@ -4,11 +4,12 @@
 // -------------------------------------------------------------------------------------------------
 // 对应 MCP 工具（前缀 vrc）：
 //   vrc.get_avatars           查询 列出场景与项目预制件中的头像
-//   vrc.get_avatar_info       查询 头像完整详情（描述符/动画层/菜单/参数/性能/渲染/插件组件）
+//   vrc.get_avatar_info       查询 头像完整详情（描述符/动画层/菜单/参数/性能/渲染/贴图/插件组件）
 //   vrc.get_performance_stats 查询 头像性能统计（优先 SDK 官方计算，否则估算）
 //   vrc.get_installed_packages 查询 VRChat 相关 SDK/插件版本探测
 //   vrc.get_component_info    查询 指定组件（MA/VRCFury 等）完整序列化参数
 //   vrc.set_component_property 写入 通用组件序列化字段设置（场景对象/预制件资产，自动保存）
+//   vrc.backup_avatar         写入 备份场景中正常显示的主头像（复制整体并隐藏，忽略既有备份）
 //
 // 实现说明：
 //   - 头像识别：按组件类型名查找 VRCAvatarDescriptor / VRC_AvatarDescriptor；
@@ -24,7 +25,9 @@ using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEditor.Animations;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using VrchatProjectMcp.Core.Json;
 using VrchatProjectMcp.Core.Mcp;
 
@@ -128,13 +131,14 @@ namespace VrchatProjectMcp.Editor.Tools
         // ==================================================================
 
         /// <summary>获取头像完整详情：描述符/动画层/菜单/参数/性能/渲染/插件组件。</summary>
-        [McpTool("vrc.get_avatar_info", McpToolAccess.Query, "vrc", "获取头像完整详情（描述符字段/动画层/表情菜单树/表情参数/性能统计/渲染骨骼统计/MA·VRCFury 等插件组件），供 Agent 输出报告与建议")]
+        [McpTool("vrc.get_avatar_info", McpToolAccess.Query, "vrc", "获取头像完整详情（描述符字段/动画层/菜单树/参数/性能统计/渲染骨骼统计/贴图尺寸·大小·类型·压缩信息/MA·VRCFury 等插件组件），供 Agent 输出报告与建议")]
         public static object GetAvatarInfo(
             [McpParam("头像目标（实例ID/场景路径/预制件资产路径）", Required = true)] string target,
-            [McpParam("是否包含表情菜单（默认 true）")] bool includeMenu = true,
-            [McpParam("是否包含表情参数（默认 true）")] bool includeParameters = true,
+            [McpParam("是否包含菜单（默认 true）")] bool includeMenu = true,
+            [McpParam("是否包含参数（默认 true）")] bool includeParameters = true,
             [McpParam("是否包含性能统计（默认 true）")] bool includeStats = true,
             [McpParam("是否包含动画层信息（默认 true）")] bool includeLayers = true,
+            [McpParam("是否包含贴图信息（尺寸/大小/类型/压缩，默认 true）")] bool includeTextures = true,
             [McpParam("菜单递归深度（默认 4）")] int menuDepth = 4)
         {
             using (ToolHelpers.TargetContext context = ToolHelpers.ResolveTarget(target))
@@ -173,14 +177,14 @@ namespace VrchatProjectMcp.Editor.Tools
                 // 动画层
                 if (includeLayers) result.Set("animatorLayers", DumpAnimatorLayers(avatarRoot));
 
-                // 表情菜单
+                // 菜单（通用：表情/衣柜/饰品切换等菜单）
                 if (includeMenu)
                 {
                     try
                     {
                         UnityEngine.Object menu = VrcReflection.ReadDescriptorAsset(descriptor, "expressionsMenu");
                         if (menu != null) result.Set("expressionsMenu", VrcMenuTools.DumpMenuAsset(menu, true, Math.Max(0, menuDepth), new HashSet<UnityEngine.Object>()));
-                        else result.Set("expressionsMenu", new JsonObject().Set("error", "未绑定表情菜单"));
+                        else result.Set("expressionsMenu", new JsonObject().Set("error", "未绑定菜单"));
                     }
                     catch (Exception ex)
                     {
@@ -188,14 +192,14 @@ namespace VrchatProjectMcp.Editor.Tools
                     }
                 }
 
-                // 表情参数
+                // 参数（通用：表情/衣柜/饰品切换等参数）
                 if (includeParameters)
                 {
                     try
                     {
                         UnityEngine.Object parameters = VrcReflection.ReadDescriptorAsset(descriptor, "expressionParameters");
                         if (parameters != null) result.Set("expressionParameters", VrcParameterTools.DumpParametersAsset(parameters));
-                        else result.Set("expressionParameters", new JsonObject().Set("error", "未绑定表情参数"));
+                        else result.Set("expressionParameters", new JsonObject().Set("error", "未绑定参数"));
                     }
                     catch (Exception ex)
                     {
@@ -208,6 +212,9 @@ namespace VrchatProjectMcp.Editor.Tools
 
                 // 渲染与骨骼统计
                 result.Set("renderInfo", CollectRenderInfo(avatarRoot));
+
+                // 贴图信息（尺寸/大小/类型/压缩）
+                if (includeTextures) result.Set("textureInfo", CollectTextureInfo(avatarRoot));
 
                 // 插件组件（MA / VRCFury / PhysBone 等）
                 result.Set("pluginComponents", CollectPluginComponents(context.Root));
@@ -353,6 +360,98 @@ namespace VrchatProjectMcp.Editor.Tools
                     .Set("property", propertyPath)
                     .Set("newValue", ToolHelpers.ReadPropertyValue(prop, 2))
                     .Set("saved", true);
+            }
+        }
+
+        // ==================================================================
+        // vrc.backup_avatar
+        // ==================================================================
+
+        /// <summary>备份场景中唯一正常显示（未隐藏）的主头像：整体复制一份并设为隐藏；忽略场景中已有的隐藏备份模型。</summary>
+        [McpTool("vrc.backup_avatar", McpToolAccess.Write, "vrc", "把当前场景中唯一处于激活显示状态的头像模型整体复制一份作为备份，命名「原模型名称(日期时分秒)」并把备份设为非激活隐藏状态；场景中已有的其他隐藏备份模型会被忽略。若场景中存在 0 个或 2 个及以上激活显示的头像，将返回报错（提示 Agent 中断任务并告知用户）")]
+        public static object BackupAvatar()
+        {
+            Scene scene = SceneManager.GetActiveScene();
+            if (!scene.IsValid() || !scene.isLoaded)
+                throw new McpToolException("当前没有已打开的场景，无法备份头像");
+
+            List<GameObject> displayed;
+            List<GameObject> hidden;
+            ClassifySceneAvatars(out displayed, out hidden);
+
+            if (displayed.Count == 0)
+            {
+                throw new McpToolException(
+                    "备份失败：当前场景内没有处于激活显示状态的头像模型。这是异常状态，请中断当前任务并告知用户——" +
+                    "场景中没有激活显示的主模型可供备份（隐藏的头像会被视为既有备份而忽略），请用户先启用/显示需要备份的主模型后再重试。");
+            }
+
+            if (displayed.Count > 1)
+            {
+                var names = new List<string>();
+                foreach (GameObject go in displayed) names.Add(ToolHelpers.GetGameObjectPath(go));
+                throw new McpToolException(
+                    "备份失败：当前场景内存在 " + displayed.Count + " 个处于激活显示状态的头像模型（" + string.Join(" / ", names) + "）。" +
+                    "这属于不正常现象——通常场景中应只有一个有效主模型。请中断当前任务并告知用户：场景中存在多个有效模型，请用户隐藏多余的模型后再重试。");
+            }
+
+            GameObject sourceRoot = displayed[0];
+
+            string timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
+            string backupName = sourceRoot.name + "(" + timestamp + ")";
+
+            GameObject backup = (GameObject)UnityEngine.Object.Instantiate(sourceRoot);
+            backup.name = backupName;
+            backup.transform.SetParent(sourceRoot.transform.parent, false);
+            backup.SetActive(false);
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorUtility.SetDirty(backup);
+
+            var ignored = new JsonArray();
+            foreach (GameObject go in hidden)
+            {
+                ignored.Add(new JsonObject()
+                    .Set("name", go.name)
+                    .Set("path", ToolHelpers.GetGameObjectPath(go))
+                    .Set("instanceId", go.GetInstanceID())
+                    .Set("activeSelf", go.activeSelf));
+            }
+
+            return new JsonObject()
+                .Set("source", new JsonObject()
+                    .Set("name", sourceRoot.name)
+                    .Set("path", ToolHelpers.GetGameObjectPath(sourceRoot))
+                    .Set("instanceId", sourceRoot.GetInstanceID()))
+                .Set("backup", new JsonObject()
+                    .Set("name", backup.name)
+                    .Set("path", ToolHelpers.GetGameObjectPath(backup))
+                    .Set("instanceId", backup.GetInstanceID())
+                    .Set("activeSelf", backup.activeSelf))
+                .Set("timestamp", timestamp)
+                .Set("ignoredBackupCount", (long)ignored.Count)
+                .Set("ignoredBackups", ignored)
+                .Set("saved", true);
+        }
+
+        /// <summary>把活动场景中的头像根对象按显示/隐藏分类（隐藏的通常为既有备份，创建新备份时应忽略）。</summary>
+        private static void ClassifySceneAvatars(out List<GameObject> displayed, out List<GameObject> hidden)
+        {
+            displayed = new List<GameObject>();
+            hidden = new List<GameObject>();
+            Type descriptorType = VrcReflection.DescriptorType;
+            Type legacyType = VrcReflection.AvatarDescriptorLegacyType;
+            if (descriptorType == null && legacyType == null)
+                throw new McpToolException("项目未安装 VRChat SDK（找不到头像描述符类型）");
+
+            Scene scene = SceneManager.GetActiveScene();
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                bool hasDescriptor = (descriptorType != null && root.GetComponentInChildren(descriptorType, true) != null)
+                    || (legacyType != null && root.GetComponentInChildren(legacyType, true) != null);
+                if (!hasDescriptor) continue;
+                if (root.activeSelf) displayed.Add(root);
+                else hidden.Add(root);
             }
         }
 
@@ -725,6 +824,190 @@ namespace VrchatProjectMcp.Editor.Tools
             result.Set("totalTriangleCount", totalTris);
             result.Set("totalBoneCount", (long)boneSet.Count);
             return result;
+        }
+
+        /// <summary>收集头像使用的贴图信息：尺寸/大小/类型/压缩情况（按材质 Shader 贴图槽聚合去重）。</summary>
+        private static JsonObject CollectTextureInfo(GameObject avatarRoot)
+        {
+            Renderer[] renderers = avatarRoot.GetComponentsInChildren<Renderer>(true);
+            var uniqueMaterials = new HashSet<Material>();
+            foreach (Renderer renderer in renderers)
+            {
+                Material[] materials = renderer.sharedMaterials;
+                if (materials == null) continue;
+                foreach (Material material in materials)
+                {
+                    if (material != null) uniqueMaterials.Add(material);
+                }
+            }
+
+            var textures = new List<Texture2D>();
+            var usageCount = new Dictionary<Texture2D, int>();
+            foreach (Material material in uniqueMaterials)
+            {
+                foreach (Texture2D tex in GetMaterialTextures(material))
+                {
+                    if (tex == null) continue;
+                    if (!usageCount.ContainsKey(tex))
+                    {
+                        usageCount[tex] = 0;
+                        textures.Add(tex);
+                    }
+                    usageCount[tex] = usageCount[tex] + 1;
+                }
+            }
+
+            long totalMemory = 0;
+            long totalFile = 0;
+            int compressedCount = 0;
+            int uncompressedCount = 0;
+            int maxWidth = 0;
+            int maxHeight = 0;
+            var textureList = new JsonArray();
+            foreach (Texture2D tex in textures)
+            {
+                JsonObject info = BuildTextureInfoJson(tex);
+                info.Set("usedByMaterialCount", (long)usageCount[tex]);
+                textureList.Add(info);
+                totalMemory += info.GetLong("estimatedMemoryBytes");
+                totalFile += info.GetLong("assetFileBytes");
+                if (info.GetBool("compressed")) compressedCount++;
+                else uncompressedCount++;
+                maxWidth = Math.Max(maxWidth, (int)info.GetLong("width"));
+                maxHeight = Math.Max(maxHeight, (int)info.GetLong("height"));
+            }
+
+            return new JsonObject()
+                .Set("textureCount", (long)textures.Count)
+                .Set("compressedTextureCount", (long)compressedCount)
+                .Set("uncompressedTextureCount", (long)uncompressedCount)
+                .Set("totalEstimatedMemoryBytes", totalMemory)
+                .Set("totalAssetFileBytes", totalFile)
+                .Set("maxTextureWidth", (long)maxWidth)
+                .Set("maxTextureHeight", (long)maxHeight)
+                .Set("textures", textureList);
+        }
+
+        /// <summary>枚举材质 Shader 的全部贴图槽，返回引用的 Texture2D（同一贴图被多个槽引用时可能重复，由调用方去重）。</summary>
+        private static List<Texture2D> GetMaterialTextures(Material material)
+        {
+            var result = new List<Texture2D>();
+            Shader shader = material != null ? material.shader : null;
+            if (shader == null) return result;
+            try
+            {
+                int count = ShaderUtil.GetPropertyCount(shader);
+                for (int i = 0; i < count; i++)
+                {
+                    if (ShaderUtil.GetPropertyType(shader, i) != ShaderUtil.ShaderPropertyType.TexEnv) continue;
+                    Texture tex = material.GetTexture(ShaderUtil.GetPropertyName(shader, i));
+                    if (tex is Texture2D tex2d) result.Add(tex2d);
+                }
+            }
+            catch { /* 单个 Shader 解析失败不影响整体 */ }
+            return result;
+        }
+
+        /// <summary>构建单张贴图的详细信息 JSON（尺寸/大小/类型/压缩）。</summary>
+        private static JsonObject BuildTextureInfoJson(Texture2D tex)
+        {
+            string path = AssetDatabase.GetAssetPath(tex);
+            string guid = string.IsNullOrEmpty(path) ? null : AssetDatabase.AssetPathToGUID(path);
+
+            var result = new JsonObject()
+                .Set("name", tex.name)
+                .Set("path", string.IsNullOrEmpty(path) ? null : path)
+                .Set("guid", guid)
+                .Set("width", (long)tex.width)
+                .Set("height", (long)tex.height)
+                .Set("format", tex.format.ToString())
+                .Set("graphicsFormat", tex.graphicsFormat.ToString())
+                .Set("compressed", IsCompressedFormat(tex.format))
+                .Set("mipmapCount", (long)tex.mipmapCount)
+                .Set("estimatedMemoryBytes", GetTextureMemorySize(tex));
+
+            long fileBytes = 0;
+            if (!string.IsNullOrEmpty(path))
+            {
+                try
+                {
+                    string absolute = Path.GetFullPath(path);
+                    if (File.Exists(absolute)) fileBytes = new FileInfo(absolute).Length;
+                }
+                catch { /* 读取文件大小失败则保持 0 */ }
+            }
+            result.Set("assetFileBytes", fileBytes);
+
+            TextureImporter importer = string.IsNullOrEmpty(path) ? null : AssetImporter.GetAtPath(path) as TextureImporter;
+            if (importer != null)
+            {
+                result.Set("textureType", importer.textureType.ToString());
+                result.Set("sRGB", importer.sRGBTexture);
+                result.Set("isReadable", importer.isReadable);
+                result.Set("mipmapEnabled", importer.mipmapEnabled);
+                result.Set("wrapMode", importer.wrapMode.ToString());
+                result.Set("filterMode", importer.filterMode.ToString());
+                result.Set("compression", importer.textureCompression.ToString());
+                result.Set("crunchedCompression", importer.crunchedCompression);
+                result.Set("compressionQuality", (long)importer.compressionQuality);
+                result.Set("maxTextureSize", (long)importer.maxTextureSize);
+                try
+                {
+                    string platform = CurrentTexturePlatform();
+                    TextureImporterPlatformSettings ps = importer.GetPlatformTextureSettings(platform);
+                    result.Set("platform", platform);
+                    result.Set("platformFormat", ps.format.ToString());
+                    result.Set("platformOverridden", ps.overridden);
+                }
+                catch { /* 平台设置读取失败不影响整体 */ }
+            }
+            return result;
+        }
+
+        /// <summary>判断贴图格式是否为压缩格式（按格式名关键字匹配，兼容各 Unity 版本的格式枚举差异）。</summary>
+        private static bool IsCompressedFormat(TextureFormat format)
+        {
+            string name = format.ToString();
+            return name.IndexOf("DXT", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("BC", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("PVRTC", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("ETC", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("EAC", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("ASTC", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Crunched", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>估算贴图 GPU/存储内存字节数：优先反射调用 TextureUtil，失败按 宽×高×4 字节近似。</summary>
+        private static long GetTextureMemorySize(Texture2D tex)
+        {
+            try
+            {
+                Type textureUtilType = ToolHelpers.FindType("UnityEditor.TextureUtil");
+                if (textureUtilType != null)
+                {
+                    MethodInfo method = textureUtilType.GetMethod("GetStorageMemorySizeLong", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+                        ?? textureUtilType.GetMethod("GetStorageMemorySize", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                    if (method != null)
+                    {
+                        object value = method.Invoke(null, new object[] { tex });
+                        if (value is long l) return l;
+                        if (value is int i) return i;
+                    }
+                }
+            }
+            catch { /* 反射失败走估算 */ }
+            return (long)tex.width * tex.height * 4;
+        }
+
+        /// <summary>把当前构建目标映射为 TextureImporter 平台设置名（Android→Android，iOS→iPhone，其余按 Standalone）。</summary>
+        private static string CurrentTexturePlatform()
+        {
+            switch (EditorUserBuildSettings.activeBuildTarget)
+            {
+                case BuildTarget.Android: return "Android";
+                case BuildTarget.iOS: return "iPhone";
+                default: return "Standalone";
+            }
         }
 
         /// <summary>收集头像上的插件组件（MA/VRCFury/PhysBone 等），含简要序列化摘要。</summary>

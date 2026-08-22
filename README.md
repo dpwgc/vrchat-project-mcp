@@ -174,24 +174,28 @@ POST http://127.0.0.1:8765/mcp
 | 工具 | 类型 | 说明 |
 | --- | --- | --- |
 | `vrc.get_avatars` | 查询 | 列出场景与项目预制件中的头像（VRCAvatarDescriptor / 旧版描述符） |
-| `vrc.get_avatar_info` | 查询 | **头像完整详情**：描述符字段/动画层/表情菜单树/表情参数/性能统计/渲染骨骼统计/MA·VRCFury 等插件组件 —— 供 Agent 输出报告与建议 |
+| `vrc.get_avatar_info` | 查询 | **头像完整详情**：描述符字段/动画层/菜单树/参数/性能统计/渲染骨骼统计/**贴图尺寸·大小·类型·压缩信息**/MA·VRCFury 等插件组件 —— 供 Agent 输出报告与建议 |
 | `vrc.get_performance_stats` | 查询 | 性能统计（面数/骨骼/材质/PhysBone/碰撞体计数与等级；优先 SDK 官方计算，否则按官方阈值估算并标注） |
 | `vrc.get_installed_packages` | 查询 | VRChat 相关 SDK/插件版本探测（VRCSDK/MA/VRCFury/Poiyomi/DynamicBone/AAO 等） |
 | `vrc.get_component_info` | 查询 | 指定组件（MA/VRCFury/PhysBone 等）完整序列化参数 |
 | `vrc.set_component_property` | 写入 | 修改任意组件（MA/VRCFury 等）序列化字段（枚举用名称，资源引用用资产路径） |
-| `vrc.list_expressions_menus` | 查询 | 列出项目中的表情菜单（VRCExpressionsMenu）资产 |
-| `vrc.get_expressions_menu` | 查询 | 读取菜单结构（控件类型/参数/值/图标/子菜单/标签，支持递归） |
-| `vrc.create_expressions_menu` | 写入 | 新建表情菜单资产 |
-| `vrc.copy_expressions_menu` | 写入 | 复制表情菜单资产 |
+| `vrc.backup_avatar` | 写入 | 把场景中唯一激活显示的主头像整体复制为隐藏备份（命名 `原名称(日期时分秒)`，忽略既有隐藏备份；0 个或 2 个及以上激活模型时返回报错） |
+| `vrc.list_menus` | 查询 | 列出项目中的菜单（VRCExpressionsMenu）资产 —— 通用菜单 |
+| `vrc.get_menu` | 查询 | 读取菜单结构（控件类型/参数/值/图标/子菜单/标签，支持递归）—— 通用菜单 |
+| `vrc.create_menu` | 写入 | 新建菜单资产 —— 通用菜单 |
+| `vrc.copy_menu` | 写入 | 复制菜单资产 —— 通用菜单 |
 | `vrc.set_menu_control` | 写入 | 新增/修改/删除菜单控件（Button/Toggle/SubMenu/TwoAxisPuppet/FourAxisPuppet/RadialPuppet，含 labels 与 subParameters） |
-| `vrc.bind_expressions` | 写入 | 把菜单/参数资产绑定到头像描述符（场景对象与预制件均支持） |
-| `vrc.list_expression_parameters` | 查询 | 列出项目中的表情参数（VRCExpressionParameters）资产 |
-| `vrc.get_expression_parameters` | 查询 | 读取参数列表（名称/类型 Int·Float·Bool/默认值/是否保存） |
-| `vrc.create_expression_parameters` | 写入 | 新建表情参数资产 |
-| `vrc.copy_expression_parameters` | 写入 | 复制表情参数资产 |
-| `vrc.set_parameter` | 写入 | 新增/修改/删除表情参数 |
+| `vrc.bind_menu` | 写入 | 把菜单/参数资产绑定到头像描述符（场景对象与预制件均支持） |
+| `vrc.list_parameters` | 查询 | 列出项目中的参数（VRCExpressionParameters）资产 —— 通用参数 |
+| `vrc.get_parameters` | 查询 | 读取参数列表（名称/类型 Int·Float·Bool/默认值/是否保存）—— 通用参数 |
+| `vrc.create_parameters` | 写入 | 新建参数资产 —— 通用参数 |
+| `vrc.copy_parameters` | 写入 | 复制参数资产 —— 通用参数 |
+| `vrc.set_parameter` | 写入 | 新增/修改/删除参数 |
 | `vrc.ma_get_parameters` | 查询 | 读取 ModularAvatarParameters 组件全部参数 |
 | `vrc.ma_set_parameter` | 写入 | 新增/修改/删除 MA 参数（syncType 按名称设置，非法值会列出该版本可选值） |
+
+> 说明：VRC 的表情、衣柜、饰品切换等**所有菜单/参数都使用同一种资产类型**（`VRCExpressionsMenu` / `VRCExpressionParameters`），
+> 因此 `vrc.*_menu` / `vrc.*_parameters` 系列是通用工具，可直接用于衣柜、饰品等菜单/参数。
 
 ### 扩展示例（example）
 
@@ -213,14 +217,19 @@ POST http://127.0.0.1:8765/mcp
   "arguments":{"target":"Assets/MyAvatar.prefab","componentType":"ModularAvatarParameters",
                "propertyPath":"parameters.Array.data[0].defaultValue","value":1.0}}}
 
-// 给表情菜单加一个开关
+// 给菜单加一个开关（通用菜单：表情/衣柜/饰品切换均可）
 {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{
   "name":"vrc.set_menu_control",
   "arguments":{"menuPath":"Assets/Menus/Main.asset","action":"add",
                "control":{"name":"开关","type":"Toggle","parameter":"MyParam"}}}}
 
-// 排查控制台报错
+// 备份场景中正常显示的主头像（整体复制并隐藏，忽略既有隐藏备份）
 {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{
+  "name":"vrc.backup_avatar",
+  "arguments":{}}}
+
+// 排查控制台报错
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{
   "name":"unity.get_console_logs",
   "arguments":{"level":"Error","maxLines":50}}}
 ```

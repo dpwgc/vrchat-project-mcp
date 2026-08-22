@@ -1,14 +1,17 @@
 // =================================================================================================
 // VrcMenuTools.cs
-// VRChat 专用工具：Expressions Menu（表情菜单）的查询 / 新建 / 复制 / 编辑 / 绑定
+// VRChat 专用工具：菜单（Expressions Menu）的查询 / 新建 / 复制 / 编辑 / 绑定
 // -------------------------------------------------------------------------------------------------
+// 说明：VRC 的表情 / 衣柜 / 饰品切换等所有菜单都使用同一种资产类型
+// （VRCExpressionsMenu），因此以下工具对表情、衣柜、饰品等各类菜单通用。
+//
 // 对应 MCP 工具（前缀 vrc）：
-//   vrc.list_expressions_menus   查询 列出项目中的表情菜单资产
-//   vrc.get_expressions_menu     查询 读取菜单结构（控件树，支持递归子菜单）
-//   vrc.create_expressions_menu  写入 新建表情菜单资产
-//   vrc.copy_expressions_menu    写入 复制表情菜单资产
+//   vrc.list_menus               查询 列出项目中的菜单资产
+//   vrc.get_menu                 查询 读取菜单结构（控件树，支持递归子菜单）
+//   vrc.create_menu              写入 新建菜单资产
+//   vrc.copy_menu                写入 复制菜单资产
 //   vrc.set_menu_control         写入 新增/修改/删除菜单控件（按钮/开关/子菜单/径向操控等）
-//   vrc.bind_expressions         写入 把菜单/参数资产绑定到头像描述符
+//   vrc.bind_menu                写入 把菜单/参数资产绑定到头像描述符
 //
 // 实现说明：
 //   全部通过 SerializedObject + 反射操作 SDK 资产，本插件对 VRCSDK3 无编译期依赖；
@@ -25,7 +28,7 @@ using VrchatProjectMcp.Core.Mcp;
 namespace VrchatProjectMcp.Editor.Tools
 {
     /// <summary>
-    /// VRChat 表情菜单工具（内部静态类）。
+    /// VRChat 菜单工具（内部静态类，表情/衣柜/饰品等各类菜单通用）。
     /// </summary>
     internal static class VrcMenuTools
     {
@@ -33,9 +36,9 @@ namespace VrchatProjectMcp.Editor.Tools
         // 查询类
         // ==================================================================
 
-        /// <summary>列出项目中的表情菜单资产。</summary>
-        [McpTool("vrc.list_expressions_menus", McpToolAccess.Query, "vrc", "列出项目中的 VRCExpressionsMenu（表情菜单）资产")]
-        public static object ListExpressionsMenus(
+        /// <summary>列出项目中的菜单资产（通用：表情/衣柜/饰品等）。</summary>
+        [McpTool("vrc.list_menus", McpToolAccess.Query, "vrc", "列出项目中的 VRCExpressionsMenu 菜单资产（通用：表情/衣柜/饰品切换等所有菜单均使用这一种资产类型）")]
+        public static object ListMenus(
             [McpParam("名称关键字（可留空）")] string search = null,
             [McpParam("最多返回条数（默认 100）")] int limit = 100)
         {
@@ -53,9 +56,9 @@ namespace VrchatProjectMcp.Editor.Tools
             return new JsonObject().Set("count", (long)items.Count).Set("menus", items);
         }
 
-        /// <summary>读取表情菜单结构（支持递归展开子菜单）。</summary>
-        [McpTool("vrc.get_expressions_menu", McpToolAccess.Query, "vrc", "读取表情菜单结构（控件列表：名称/类型/参数/值/图标/子菜单/标签；recursive=true 时递归展开子菜单）")]
-        public static object GetExpressionsMenu(
+        /// <summary>读取菜单结构（通用，支持递归展开子菜单）。</summary>
+        [McpTool("vrc.get_menu", McpToolAccess.Query, "vrc", "读取菜单结构（通用：表情/衣柜/饰品切换等菜单；控件列表含名称/类型/参数/值/图标/子菜单/标签，支持递归展开子菜单）")]
+        public static object GetMenu(
             [McpParam("菜单资产路径（如 Assets/MyMenu.asset；与 avatarTarget 二选一）")] string menuPath = null,
             [McpParam("头像目标（实例ID/场景路径/预制件路径；读取其绑定的菜单）")] string avatarTarget = null,
             [McpParam("是否递归展开子菜单（默认 true）")] bool recursive = true,
@@ -73,7 +76,7 @@ namespace VrchatProjectMcp.Editor.Tools
                     Component descriptor = ToolHelpers.FindAvatarDescriptor(context.Root);
                     menu = VrcReflection.ReadDescriptorAsset(descriptor, "expressionsMenu");
                 }
-                if (menu == null) throw new McpToolException("该头像未绑定 Expressions Menu（expressionsMenu 为空）");
+                if (menu == null) throw new McpToolException("该头像未绑定菜单（expressionsMenu 为空）");
             }
             else
             {
@@ -86,9 +89,9 @@ namespace VrchatProjectMcp.Editor.Tools
         // 写入类
         // ==================================================================
 
-        /// <summary>新建表情菜单资产。</summary>
-        [McpTool("vrc.create_expressions_menu", McpToolAccess.Write, "vrc", "新建 VRCExpressionsMenu（表情菜单）资产（path 为文件夹或完整 .asset 路径）")]
-        public static object CreateExpressionsMenu(
+        /// <summary>新建菜单资产（通用：表情/衣柜/饰品等）。</summary>
+        [McpTool("vrc.create_menu", McpToolAccess.Write, "vrc", "新建 VRCExpressionsMenu 菜单资产（通用：表情/衣柜/饰品切换等；path 为文件夹或完整 .asset 路径）")]
+        public static object CreateMenu(
             [McpParam("资产路径（Assets/ 下文件夹，或完整 xx.asset 路径）", Required = true)] string path,
             [McpParam("菜单名称（path 为文件夹时必填）")] string name = null)
         {
@@ -104,9 +107,9 @@ namespace VrchatProjectMcp.Editor.Tools
                 .Set("name", menu.name);
         }
 
-        /// <summary>复制表情菜单资产。</summary>
-        [McpTool("vrc.copy_expressions_menu", McpToolAccess.Write, "vrc", "复制表情菜单资产到新路径（重名自动追加序号）")]
-        public static object CopyExpressionsMenu(
+        /// <summary>复制菜单资产（通用：表情/衣柜/饰品等）。</summary>
+        [McpTool("vrc.copy_menu", McpToolAccess.Write, "vrc", "复制菜单资产到新路径（重名自动追加序号；通用：表情/衣柜/饰品等）")]
+        public static object CopyMenu(
             [McpParam("源菜单路径", Required = true)] string sourcePath,
             [McpParam("目标路径（Assets/ 下）", Required = true)] string targetPath)
         {
@@ -120,7 +123,7 @@ namespace VrchatProjectMcp.Editor.Tools
         }
 
         /// <summary>新增/修改/删除菜单控件（按钮/开关/子菜单/径向操控等）。</summary>
-        [McpTool("vrc.set_menu_control", McpToolAccess.Write, "vrc", "新增/修改/删除表情菜单控件。action: add/update/remove；control 对象字段：name、type(Button/Toggle/SubMenu/TwoAxisPuppet/FourAxisPuppet/RadialPuppet)、parameter(参数名或{name,input})、value、icon(图标资源路径)、subMenu(子菜单资产路径)、labels(字符串数组或[{name,icon}])、subParameters")]
+        [McpTool("vrc.set_menu_control", McpToolAccess.Write, "vrc", "新增/修改/删除菜单控件（通用：表情/衣柜/饰品切换等）。action: add/update/remove；control 对象字段：name、type(Button/Toggle/SubMenu/TwoAxisPuppet/FourAxisPuppet/RadialPuppet)、parameter(参数名或{name,input})、value、icon(图标资源路径)、subMenu(子菜单资产路径)、labels(字符串数组或[{name,icon}])、subParameters")]
         public static object SetMenuControl(
             [McpParam("菜单资产路径", Required = true)] string menuPath,
             [McpParam("操作：add 新增 / update 修改 / remove 删除", Required = true)] string action,
@@ -164,9 +167,9 @@ namespace VrchatProjectMcp.Editor.Tools
             return DumpMenuAsset(menu, false, 0, new HashSet<UnityEngine.Object>());
         }
 
-        /// <summary>把菜单/参数资产绑定到头像描述符（场景对象或预制件资产，自动保存）。</summary>
-        [McpTool("vrc.bind_expressions", McpToolAccess.Write, "vrc", "把表情菜单/表情参数资产绑定到头像描述符（menuPath 与 parametersPath 至少提供其一；场景对象与预制件资产均支持）")]
-        public static object BindExpressions(
+        /// <summary>把菜单/参数资产绑定到头像描述符（通用；场景对象或预制件资产，自动保存）。</summary>
+        [McpTool("vrc.bind_menu", McpToolAccess.Write, "vrc", "把菜单/参数资产绑定到头像描述符（通用：表情/衣柜/饰品切换等；menuPath 与 parametersPath 至少提供其一；场景对象与预制件资产均支持）")]
+        public static object BindMenu(
             [McpParam("头像目标（实例ID/场景路径/预制件资产路径）", Required = true)] string avatarTarget,
             [McpParam("菜单资产路径（可留空）")] string menuPath = null,
             [McpParam("参数资产路径（可留空）")] string parametersPath = null)
